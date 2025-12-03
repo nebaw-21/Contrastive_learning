@@ -1,0 +1,168 @@
+"""
+Contrastive learning training module
+"""
+from sentence_transformers import SentenceTransformer, InputExample, losses
+from torch.utils.data import DataLoader
+from typing import List, Tuple, Optional
+import os
+
+
+class ContrastiveTrainer:
+    """Train a contrastive learning model for semantic similarity."""
+    
+    def __init__(self, base_model_name: str = 'all-MiniLM-L6-v2'):
+        """
+        Initialize trainer.
+        
+        Args:
+            base_model_name: Name of pre-trained SentenceTransformer model
+        """
+        print(f"Initializing model: {base_model_name}")
+        self.model = SentenceTransformer(base_model_name)
+        self.base_model_name = base_model_name
+    
+    def prepare_dataloader(self, triplets: List[Tuple[str, str, str]], 
+                          batch_size: int = 32, shuffle: bool = True) -> DataLoader:
+        """
+        Prepare DataLoader from triplets.
+        
+        Args:
+            triplets: List of (anchor, positive, negative) triplets
+            batch_size: Batch size
+            shuffle: Whether to shuffle data
+            
+        Returns:
+            DataLoader
+        """
+        # Convert triplets to InputExample format for TripletLoss
+        train_examples = [
+            InputExample(texts=[anchor, positive, negative])
+            for anchor, positive, negative in triplets
+        ]
+        
+        train_dataloader = DataLoader(train_examples, shuffle=shuffle, batch_size=batch_size)
+        return train_dataloader
+    
+    def train(self, train_dataloader: DataLoader,
+              loss_type: str = 'triplet',
+              num_epochs: int = 2,
+              warmup_steps: Optional[int] = None,
+              output_path: str = 'models/news_contrastive_model',
+              save_model: bool = True):
+        """
+        Train the model with contrastive learning.
+        
+        Args:
+            train_dataloader: DataLoader with training examples
+            loss_type: Type of loss ('triplet', 'cosine', 'contrastive')
+            num_epochs: Number of training epochs
+            warmup_steps: Number of warmup steps (auto-calculated if None)
+            output_path: Path to save the trained model
+            save_model: Whether to save the model after training
+        """
+        print(f"\nStarting training with {loss_type} loss...")
+        print(f"Number of epochs: {num_epochs}")
+        print(f"Batch size: {train_dataloader.batch_size}")
+        
+        # Select loss function
+        if loss_type == 'triplet':
+            train_loss = losses.TripletLoss(model=self.model)
+        elif loss_type == 'cosine':
+            train_loss = losses.CosineSimilarityLoss(model=self.model)
+        elif loss_type == 'contrastive':
+            train_loss = losses.ContrastiveLoss(model=self.model)
+        else:
+            raise ValueError(f"Unknown loss type: {loss_type}")
+        
+        # Calculate warmup steps if not provided
+        if warmup_steps is None:
+            warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)
+        
+        print(f"Warmup steps: {warmup_steps}")
+        
+        # Train the model
+        self.model.fit(
+            train_objectives=[(train_dataloader, train_loss)],
+            epochs=num_epochs,
+            warmup_steps=warmup_steps,
+            output_path=output_path if save_model else None,
+            show_progress_bar=True
+        )
+        
+        if save_model:
+            print(f"\nModel saved to {output_path}")
+    
+    def train_with_infonce(self, train_dataloader: DataLoader,
+                          num_epochs: int = 2,
+                          temperature: float = 0.05,
+                          warmup_steps: Optional[int] = None,
+                          output_path: str = 'models/news_contrastive_model',
+                          save_model: bool = True):
+        """
+        Train with InfoNCE loss (MultipleNegativesRankingLoss).
+        
+        Args:
+            train_dataloader: DataLoader with training examples
+            num_epochs: Number of training epochs
+            temperature: Temperature parameter for InfoNCE
+            warmup_steps: Number of warmup steps
+            output_path: Path to save the trained model
+            save_model: Whether to save the model after training
+        """
+        print(f"\nStarting training with InfoNCE loss (temperature={temperature})...")
+        print(f"Number of epochs: {num_epochs}")
+        
+        # InfoNCE is implemented as MultipleNegativesRankingLoss in sentence-transformers
+        train_loss = losses.MultipleNegativesRankingLoss(model=self.model, 
+                                                         scale=1.0/temperature)
+        
+        if warmup_steps is None:
+            warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)
+        
+        print(f"Warmup steps: {warmup_steps}")
+        
+        self.model.fit(
+            train_objectives=[(train_dataloader, train_loss)],
+            epochs=num_epochs,
+            warmup_steps=warmup_steps,
+            output_path=output_path if save_model else None,
+            show_progress_bar=True
+        )
+        
+        if save_model:
+            print(f"\nModel saved to {output_path}")
+    
+    def load_model(self, model_path: str):
+        """Load a saved model."""
+        print(f"Loading model from {model_path}")
+        self.model = SentenceTransformer(model_path)
+    
+    def encode(self, texts: List[str], show_progress: bool = True):
+        """Encode texts to embeddings."""
+        return self.model.encode(texts, show_progress_bar=show_progress)
+
+
+if __name__ == "__main__":
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from src.data_loader import load_news_dataset, preprocess_dataset
+    from src.triplets import create_triplets_from_dataset
+    
+    # Test training
+    print("Loading dataset...")
+    dataset = load_news_dataset("ag_news")
+    dataset = preprocess_dataset(dataset)
+    
+    print("Creating triplets...")
+    triplets = create_triplets_from_dataset(dataset['train'], max_triplets=2000)
+    
+    print("Initializing trainer...")
+    trainer = ContrastiveTrainer()
+    
+    print("Preparing dataloader...")
+    train_dataloader = trainer.prepare_dataloader(triplets, batch_size=32)
+    
+    print("Training model...")
+    trainer.train(train_dataloader, loss_type='triplet', num_epochs=2)
+
