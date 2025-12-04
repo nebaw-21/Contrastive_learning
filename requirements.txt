@@ -3,7 +3,6 @@ torch>=2.0.0
 transformers>=4.30.0
 sentence-transformers>=2.2.0
 datasets>=2.14.0
-accelerate>=0.26.0
 
 # Vector search and similarity
 faiss-cpu>=1.7.4

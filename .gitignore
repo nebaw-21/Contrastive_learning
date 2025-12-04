@@ -80,3 +80,6 @@ articles.pkl
 tmp/
 temp/
 *.tmp
+# docs
+docs/
+

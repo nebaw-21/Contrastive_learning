@@ -24,20 +24,27 @@ class BaselineEvaluator:
         self.embeddings = None
         self.texts = None
     
-    def encode(self, texts: List[str], show_progress: bool = True) -> np.ndarray:
+    def encode(self, texts: List[str], show_progress: bool = True, batch_size: int = 32) -> np.ndarray:
         """
         Encode texts to embeddings.
         
         Args:
             texts: List of text strings
             show_progress: Whether to show progress bar
+            batch_size: Batch size for encoding (reduce if memory issues)
             
         Returns:
             Numpy array of embeddings
         """
         print(f"Encoding {len(texts)} texts...")
         self.texts = texts
-        self.embeddings = self.model.encode(texts, show_progress_bar=show_progress)
+        
+        # For large datasets, use smaller batch size to avoid memory issues
+        if len(texts) > 10000:
+            batch_size = min(batch_size, 16)
+            print(f"Using batch size {batch_size} for large dataset")
+        
+        self.embeddings = self.model.encode(texts, show_progress_bar=show_progress, batch_size=batch_size)
         return self.embeddings
     
     def compute_similarity(self, query_idx: int, top_k: int = 10) -> List[Tuple[int, float]]:
@@ -66,7 +73,7 @@ class BaselineEvaluator:
         
         return results
     
-    def visualize_embeddings(self, labels: List[int] = None, n_samples: int = 1000, 
+    def visualize_embeddings(self, labels: List[int] = None, n_samples: int = 2000, 
                             save_path: str = None, title: str = "Baseline Embeddings"):
         """
         Visualize embeddings using UMAP dimensionality reduction.
@@ -83,14 +90,18 @@ class BaselineEvaluator:
         embeddings_to_plot = self.embeddings
         labels_to_plot = labels
         
+        # Limit samples for visualization to avoid memory issues
         if len(self.embeddings) > n_samples:
+            print(f"Sampling {n_samples} from {len(self.embeddings)} embeddings for visualization...")
             indices = np.random.choice(len(self.embeddings), n_samples, replace=False)
             embeddings_to_plot = self.embeddings[indices]
             if labels:
                 labels_to_plot = [labels[i] for i in indices]
         
         print("Reducing dimensions with UMAP...")
-        reducer = umap.UMAP(n_components=2, random_state=42)
+        # Use lower n_neighbors for large datasets to speed up
+        n_neighbors = min(15, len(embeddings_to_plot) - 1) if len(embeddings_to_plot) > 15 else len(embeddings_to_plot) - 1
+        reducer = umap.UMAP(n_components=2, n_neighbors=n_neighbors, random_state=42, verbose=True)
         reduced = reducer.fit_transform(embeddings_to_plot)
         
         plt.figure(figsize=(12, 8))

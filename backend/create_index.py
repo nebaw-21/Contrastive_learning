@@ -8,11 +8,6 @@ import numpy as np
 import pickle
 import os
 from tqdm import tqdm
-import sys
-
-# Add parent directory to path to import src modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.data_loader import preprocess_dataset, get_text_and_labels
 
 def create_index(model_path: str = "models/news_contrastive_model",
                  output_index_path: str = "models/faiss_index.bin",
@@ -38,10 +33,13 @@ def create_index(model_path: str = "models/news_contrastive_model",
     
     print(f"Loading dataset: {dataset_name}")
     dataset = load_dataset(dataset_name)
-    dataset = preprocess_dataset(dataset)
     
-    # Get articles using the data_loader utility
-    articles, _ = get_text_and_labels(dataset['train'], max_samples=max_articles)
+    # Get articles
+    articles = []
+    for item in dataset['train'][:max_articles]:
+        text = item.get('text') or item.get('description', '')
+        if text:
+            articles.append(text)
     
     print(f"Encoding {len(articles)} articles...")
     embeddings = model.encode(articles, show_progress_bar=True, batch_size=32)

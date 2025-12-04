@@ -4,7 +4,6 @@ Streamlit frontend for news article semantic similarity search
 import streamlit as st
 import requests
 import json
-import html
 from typing import List, Dict
 import plotly.graph_objects as go
 import plotly.express as px
@@ -31,28 +30,14 @@ st.markdown("""
     }
     .article-box {
         background-color: #f0f2f6;
-        color: #1f1f1f;
         padding: 1rem;
         border-radius: 0.5rem;
         margin: 1rem 0;
-        border: 1px solid #d0d0d0;
-        line-height: 1.6;
-        font-size: 0.95rem;
-    }
-    .article-box p {
-        color: #1f1f1f;
-        margin: 0;
     }
     .similarity-score {
         font-size: 0.9rem;
         color: #666;
         font-style: italic;
-        margin-top: 0.5rem;
-    }
-    /* Ensure text is visible in Streamlit's dark mode */
-    [data-testid="stAppViewContainer"] .article-box {
-        background-color: #f0f2f6 !important;
-        color: #1f1f1f !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -143,8 +128,7 @@ def main():
                     
                     # Display query article
                     st.markdown("### Your Article")
-                    escaped_text = html.escape(article_text[:500])
-                    st.markdown(f'<div class="article-box"><p>{escaped_text}...</p></div>', 
+                    st.markdown(f'<div class="article-box">{article_text[:500]}...</div>', 
                               unsafe_allow_html=True)
                     
                     # Display results
@@ -156,9 +140,7 @@ def main():
                         results['indices']
                     ), 1):
                         with st.expander(f"Article {i} (Similarity: {score:.4f})", expanded=(i <= 2)):
-                            # Escape HTML to prevent issues and ensure text is visible
-                            escaped_article = html.escape(article)
-                            st.markdown(f'<div class="article-box"><p>{escaped_article}</p></div>', 
+                            st.markdown(f'<div class="article-box">{article}</div>', 
                                       unsafe_allow_html=True)
                             st.markdown(f'<p class="similarity-score">Index: {idx} | Score: {score:.4f}</p>', 
                                       unsafe_allow_html=True)
